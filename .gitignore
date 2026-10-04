@@ -1,0 +1,17 @@
+bin/
+obj/
+*.pdb
+*.deps.json
+*.user
+*.suo
+*.bak
+*.bak2
+*.tmp
+*~
+.vs/
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.log
