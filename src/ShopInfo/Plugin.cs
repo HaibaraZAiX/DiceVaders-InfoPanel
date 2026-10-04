@@ -52,6 +52,7 @@ namespace DiceVaders.ShopInfo
         internal static ConfigEntry<bool> ShowArtifactProbs;
         internal static ConfigEntry<bool> ShowPoolSummary;
         internal static ConfigEntry<bool> ShowHiddenValues;
+        internal static ConfigEntry<bool> ShowAstral;
         internal static ConfigEntry<float> ExtraOffsetY;
         internal static ConfigEntry<bool> LogOnRarityChange;
 
@@ -61,12 +62,12 @@ namespace DiceVaders.ShopInfo
             ModKitLog.Sink = m => Logger.LogInfo(m);
 
             ShowPanel = Config.Bind("1-显示", "ShowPanel", true, "显示商店出货概率面板。");
-            OffsetX = Config.Bind("1-显示", "OffsetX", 20f,
+            OffsetX = Config.Bind("1-显示", "OffsetX", 420f,
                 new ConfigDescription("左列距屏幕左边缘像素。", new AcceptableValueRange<float>(0f, 900f)));
             RightOffsetX = Config.Bind("1-显示", "RightOffsetX", 460f,
                 new ConfigDescription("右列距屏幕右边缘像素（默认 460，落在「发射！」按钮左边）。",
                     new AcceptableValueRange<float>(0f, 900f)));
-            OffsetY = Config.Bind("1-显示", "OffsetY", 140f,
+            OffsetY = Config.Bind("1-显示", "OffsetY", 280f,
                 new ConfigDescription("两列距屏幕底部像素。", new AcceptableValueRange<float>(0f, 900f)));
             FontSize = Config.Bind("1-显示", "FontSize", 15f,
                 new ConfigDescription("字号。", new AcceptableValueRange<float>(8f, 40f)));
@@ -77,12 +78,15 @@ namespace DiceVaders.ShopInfo
 
             // ── 隐藏数值：游戏从不在界面上显示、但实际影响战斗的那些 EncounterValue ══
             // 对应差评里骂的 BOSS 机制（兽化 / 怒气 / 蜂群倍率 / 血祭 等）。
-            ShowHiddenValues = Config.Bind("1-显示", "ShowHiddenValues", true,
+            ShowHiddenValues = Config.Bind("1-显示", "ShowHiddenValues", false,
                 "显示隐藏的对局数值（全局倍率 / 怒气 / 兽化回合 / 蜂群倍率 / 献祭% / 增益% / 最终BOSS血量 / 跳过量）。\n" +
                 "★ 只在数值非零时显示，全为零时这一块会整体隐藏，不占地方。");
             ExtraOffsetY = Config.Bind("1-显示", "HiddenValuesOffsetY", 300f,
                 new ConfigDescription("隐藏数值块距屏幕底部像素（它在左列上方）。",
-                    new AcceptableValueRange<float>(0f, 900f)));
+                    new AcceptableValueRange<float>(0f, 900f)));            ShowAstral = Config.Bind("1-显示", "ShowAstral", true,
+                "在右列底部显示「星界」出现概率。\n" +
+                "★ 星界是独立的一次掷骰（在选秀格上判定），不占四档概率之和，所以单独列出。\n" +
+                "   依据：DraftChoice.Initialize 的 astralChance 参数，DraftPanel.CreateNewDraft 传常量 0.02。");
             LogOnRarityChange = Config.Bind("2-调试", "LogOnRarityChange", true,
                 "权重基数变化时在日志里打印一行，方便对照游戏内数值。");
 
@@ -106,6 +110,15 @@ namespace DiceVaders.ShopInfo
         private const float K_UNCOMMON = 0.015f;    // VA 0x183A24B6C
         private const float C_A = 0.03f;            // VA 0x183A24BA0
         private const float C_B = 0.1f;             // VA 0x183A24C00
+
+        /// <summary>
+        /// 星界（Astral）出现概率 —— 独立于上面四档的一次掷骰。
+        ///
+        /// 实证：DraftPanel.CreateNewDraft 调用 DraftChoice.Initialize 时传常量 0.02；
+        ///       DraftChoice 里做 Random.NextDouble() &lt; astralChance 判定，命中后
+        ///       把稀有度写成 11（Rarity.Astral）。难度为 Tutorial(7) 时永不触发。
+        /// </summary>
+        private const float ASTRAL_CHANCE = 0.02f;
 
         private GameObject _canvas;
         private TMPro.TextMeshProUGUI _textLeft;    // 左下：商品棋子概率
@@ -253,21 +266,29 @@ namespace DiceVaders.ShopInfo
             float pCom = 1f - c3;
 
             // ── 左：商品棋子各稀有度概率（竖排，一行一个）──
+            // 配色取自游戏自己的 ContentGetter.GetRarityHex：
+            //   普通 #767D5A / 罕见 #1ACB68 / 稀有 #CA47BA / 传说 #E58D07 / 星界 #C01E20
             SetText(_textLeft,
                 "<size=85%><color=#9FB4C7>商品棋子</color></size>\n" +
-                $"<color=#FFB800>传说</color> {pLeg * 100f:0.0}%\n" +
-                $"<color=#C77DFF>稀有</color> {pRare * 100f:0.0}%\n" +
-                $"<color=#4FC3F7>罕见</color> {pUnc * 100f:0.0}%\n" +
-                $"<color=#B0BEC5>普通</color> {pCom * 100f:0.0}%");
+                $"<color=#E58D07>传说</color> {pLeg * 100f:0.0}%\n" +
+                $"<color=#CA47BA>稀有</color> {pRare * 100f:0.0}%\n" +
+                $"<color=#1ACB68>罕见</color> {pUnc * 100f:0.0}%\n" +
+                $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%");
 
-            // ── 右：神器物品各稀有度概率（同一套曲线，数值相同）──
+            // ── 右：神器物品各稀有度概率（同一套曲线），底部附星界 ──
+            var rightText =
+                "<size=85%><color=#9FB4C7>神器物品</color></size>\n" +
+                $"<color=#E58D07>传说</color> {pLeg * 100f:0.0}%\n" +
+                $"<color=#CA47BA>稀有</color> {pRare * 100f:0.0}%\n" +
+                $"<color=#1ACB68>罕见</color> {pUnc * 100f:0.0}%\n" +
+                $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%";
+
+            // 星界：独立掷骰，不占上面四档之和，所以单独一行
+            if (Plugin.ShowAstral != null && Plugin.ShowAstral.Value)
+                rightText += $"\n<color=#C01E20>星界</color> {ASTRAL_CHANCE * 100f:0.0}%";
+
             if (Plugin.ShowArtifactProbs != null && Plugin.ShowArtifactProbs.Value)
-                SetText(_textRight,
-                    "<size=85%><color=#9FB4C7>神器物品</color></size>\n" +
-                    $"<color=#FFB800>传说</color> {pLeg * 100f:0.0}%\n" +
-                    $"<color=#C77DFF>稀有</color> {pRare * 100f:0.0}%\n" +
-                    $"<color=#4FC3F7>罕见</color> {pUnc * 100f:0.0}%\n" +
-                    $"<color=#B0BEC5>普通</color> {pCom * 100f:0.0}%");
+                SetText(_textRight, rightText);
             else
                 SetText(_textRight, "");
 
