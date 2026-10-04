@@ -46,6 +46,7 @@ namespace DiceVaders.ShopInfo
 
         internal static ConfigEntry<bool> ShowPanel;
         internal static ConfigEntry<float> OffsetX;
+        internal static ConfigEntry<float> RightOffsetX;
         internal static ConfigEntry<float> OffsetY;
         internal static ConfigEntry<float> FontSize;
         internal static ConfigEntry<bool> ShowArtifactProbs;
@@ -58,16 +59,19 @@ namespace DiceVaders.ShopInfo
             ModKitLog.Sink = m => Logger.LogInfo(m);
 
             ShowPanel = Config.Bind("1-显示", "ShowPanel", true, "显示商店出货概率面板。");
-            OffsetX = Config.Bind("1-显示", "OffsetX", 30f,
-                new ConfigDescription("面板距屏幕左边缘像素。", new AcceptableValueRange<float>(0f, 1900f)));
-            OffsetY = Config.Bind("1-显示", "OffsetY", 150f,
-                new ConfigDescription("面板距屏幕顶部像素。", new AcceptableValueRange<float>(0f, 1000f)));
-            FontSize = Config.Bind("1-显示", "FontSize", 22f,
-                new ConfigDescription("字号。", new AcceptableValueRange<float>(10f, 48f)));
+            OffsetX = Config.Bind("1-显示", "OffsetX", 20f,
+                new ConfigDescription("左列距屏幕左边缘像素。", new AcceptableValueRange<float>(0f, 900f)));
+            RightOffsetX = Config.Bind("1-显示", "RightOffsetX", 460f,
+                new ConfigDescription("右列距屏幕右边缘像素（默认 460，落在「发射！」按钮左边）。",
+                    new AcceptableValueRange<float>(0f, 900f)));
+            OffsetY = Config.Bind("1-显示", "OffsetY", 140f,
+                new ConfigDescription("两列距屏幕底部像素。", new AcceptableValueRange<float>(0f, 900f)));
+            FontSize = Config.Bind("1-显示", "FontSize", 15f,
+                new ConfigDescription("字号。", new AcceptableValueRange<float>(8f, 40f)));
             ShowArtifactProbs = Config.Bind("1-显示", "ShowArtifactProbs", true,
-                "同时显示神器的概率（用的是同一组曲线，但普通档是 0.91 的补数）。");
-            ShowPoolSummary = Config.Bind("1-显示", "ShowPoolSummary", true,
-                "显示「本局神器池」统计 —— 各类神器当前实际可获得的数量，按稀有度分组（已用游戏自己的可获得性判定过滤）。");
+                "在右侧显示神器物品的稀有度概率（与左侧商品棋子共用同一套曲线）。");
+            ShowPoolSummary = Config.Bind("1-显示", "ShowPoolSummary", false,
+                "（保留项）显示「本局神器池」统计。默认关，日志里仍会记录可获得数量。");
             LogOnRarityChange = Config.Bind("2-调试", "LogOnRarityChange", true,
                 "权重基数变化时在日志里打印一行，方便对照游戏内数值。");
 
@@ -101,9 +105,8 @@ namespace DiceVaders.ShopInfo
         private void Start() { BuildUI(); }
 
         /// <summary>
-        /// 建两个小文本框，分列屏幕中下方的左右两侧。
-        /// 锚点取屏幕底部中点，左右各偏移 OffsetX 像素 —— 这样不管分辨率多少，
-        /// 都稳定落在「中间偏下」的位置，不挡中间的战斗区和底部的骰子区。
+        /// 建两个竖排小文本框，分别贴屏幕左边缘与右边缘（垂直居中）。
+        /// 左：商品棋子各稀有度概率；右：神器各稀有度概率。
         /// </summary>
         private void BuildUI()
         {
@@ -112,33 +115,38 @@ namespace DiceVaders.ShopInfo
                 _canvas = UiInjector.GetOverlayCanvas("DiceVaders_ShopInfoCanvas", 31000);
                 if (_canvas == null) { ModKitLog.Info("ShopInfo: Canvas 创建失败"); return; }
 
-                _textLeft = MakeText("InfoLeft", new Vector2(-1f, 0f));
-                _textRight = MakeText("InfoRight", new Vector2(0f, 0f));
+                _textLeft = MakeText("InfoLeft", anchoredLeft: true);
+                _textRight = MakeText("InfoRight", anchoredLeft: false);
 
-                ModKitLog.Info("ShopInfo: 左右文本已创建");
+                ModKitLog.Info("ShopInfo: 左右竖排文本已创建");
             }
             catch (Exception e) { ModKitLog.Info("ShopInfo BuildUI 失败: " + e.Message); }
         }
 
-        /// <summary>建一个右/左对齐的小文本（pivot 决定它从锚点往哪边生长）。</summary>
-        private TMPro.TextMeshProUGUI MakeText(string name, Vector2 pivot)
+        /// <summary>
+        /// 建一个竖排文本框。
+        /// 左列锚在屏幕【左下角】、右列锚在【右下角】，pivot 同为 (x,0) —— 文本各自向上生长。
+        /// OffsetX 控制左列距左边缘，RightOffsetX 控制右列距右边缘；OffsetY 是两列距底部的共同高度。
+        /// </summary>
+        private TMPro.TextMeshProUGUI MakeText(string name, bool anchoredLeft)
         {
             var go = new GameObject(name);
             go.layer = 5;
             go.transform.SetParent(_canvas.transform, false);
             var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0f);
-            rt.anchorMax = new Vector2(0.5f, 0f);
-            rt.pivot = pivot;
-            rt.sizeDelta = new Vector2(320f, 120f);
+            float ax = anchoredLeft ? 0f : 1f;
+            rt.anchorMin = new Vector2(ax, 0f);
+            rt.anchorMax = new Vector2(ax, 0f);
+            rt.pivot = new Vector2(ax, 0f);
+            rt.sizeDelta = new Vector2(240f, 200f);
 
             var t = go.AddComponent<TMPro.TextMeshProUGUI>();
-            float fs = 16f;
+            float fs = 15f;
             var font = UiInjector.FindAnyFont(out fs);
             if (font != null) t.font = font;
             t.fontSize = Plugin.FontSize.Value;
             t.color = new Color(0.88f, 0.94f, 1f, 0.92f);
-            t.alignment = TMPro.TextAlignmentOptions.TopLeft;
+            t.alignment = anchoredLeft ? TMPro.TextAlignmentOptions.Left : TMPro.TextAlignmentOptions.Right;
             t.richText = true;
             try { t.enableAutoSizing = false; } catch { }
             t.text = "";
@@ -155,12 +163,12 @@ namespace DiceVaders.ShopInfo
                     return;
                 }
 
-                // 位置：锚点在屏幕底部中点，左文本往左长、右文本往右长
+                // 位置：左列贴左下角偏移 OffsetX，右列贴右下角偏移 RightOffsetX，两列同高 OffsetY
                 if (_textLeft != null)
                 {
                     var rt = _textLeft.rectTransform;
                     if (rt != null)
-                        rt.anchoredPosition = new Vector2(-Plugin.OffsetX.Value, Plugin.OffsetY.Value);
+                        rt.anchoredPosition = new Vector2(Plugin.OffsetX.Value, Plugin.OffsetY.Value);
                     if (Math.Abs(_textLeft.fontSize - Plugin.FontSize.Value) > 0.01f)
                         _textLeft.fontSize = Plugin.FontSize.Value;
                 }
@@ -168,7 +176,7 @@ namespace DiceVaders.ShopInfo
                 {
                     var rt = _textRight.rectTransform;
                     if (rt != null)
-                        rt.anchoredPosition = new Vector2(Plugin.OffsetX.Value, Plugin.OffsetY.Value);
+                        rt.anchoredPosition = new Vector2(-Plugin.RightOffsetX.Value, Plugin.OffsetY.Value);
                     if (Math.Abs(_textRight.fontSize - Plugin.FontSize.Value) > 0.01f)
                         _textRight.fontSize = Plugin.FontSize.Value;
                 }
@@ -216,17 +224,22 @@ namespace DiceVaders.ShopInfo
             float pUnc = c3 - c2;
             float pCom = 1f - c3;
 
-            // ── 左：商店四档概率（一行小字）──
+            // ── 左：商品棋子各稀有度概率（竖排，一行一个）──
             SetText(_textLeft,
-                $"<size=90%><color=#9FB4C7>W={w}</color></size>  " +
-                $"<color=#FFB800>传说</color> {pLeg * 100f:0.0}%  " +
-                $"<color=#C77DFF>稀有</color> {pRare * 100f:0.0}%  " +
-                $"<color=#4FC3F7>罕见</color> {pUnc * 100f:0.0}%  " +
+                "<size=85%><color=#9FB4C7>商品棋子</color></size>\n" +
+                $"<color=#FFB800>传说</color> {pLeg * 100f:0.0}%\n" +
+                $"<color=#C77DFF>稀有</color> {pRare * 100f:0.0}%\n" +
+                $"<color=#4FC3F7>罕见</color> {pUnc * 100f:0.0}%\n" +
                 $"<color=#B0BEC5>普通</color> {pCom * 100f:0.0}%");
 
-            // ── 右：本局神器池（一行小字）──
-            if (Plugin.ShowPoolSummary != null && Plugin.ShowPoolSummary.Value)
-                SetText(_textRight, BuildPoolSummaryLine(em));
+            // ── 右：神器物品各稀有度概率（同一套曲线，数值相同）──
+            if (Plugin.ShowArtifactProbs != null && Plugin.ShowArtifactProbs.Value)
+                SetText(_textRight,
+                    "<size=85%><color=#9FB4C7>神器物品</color></size>\n" +
+                    $"<color=#FFB800>传说</color> {pLeg * 100f:0.0}%\n" +
+                    $"<color=#C77DFF>稀有</color> {pRare * 100f:0.0}%\n" +
+                    $"<color=#4FC3F7>罕见</color> {pUnc * 100f:0.0}%\n" +
+                    $"<color=#B0BEC5>普通</color> {pCom * 100f:0.0}%");
             else
                 SetText(_textRight, "");
         }
