@@ -93,16 +93,27 @@ DiceVaders\
 ```ini
 [1-显示]
 ShowPanel = true          # 总开关
-OffsetX = 270             # 距屏幕【中点】左右各多少像素
-OffsetY = 96              # 距屏幕底部多少像素
-FontSize = 15             # 字号（想要更小就调到 12~13）
-ShowPoolSummary = true    # 右侧的「本局池」
+OffsetX = 20              # 左列距屏幕【左】边缘像素
+RightOffsetX = 460        # 右列距屏幕【右】边缘像素（默认落在「发射！」按钮左边）
+OffsetY = 140             # 两列距屏幕【底部】像素
+FontSize = 15             # 字号（想更小就 12~13）
+ShowArtifactProbs = true  # 右侧那列（神器概率）
 
 [2-调试]
 LogOnRarityChange = true  # W 变化时写一行日志，便于核对
 ```
 
-**位置想调**：`OffsetX` 调大 → 两段文字离屏幕中间更远；`OffsetY` 调大 → 更靠上。
+**位置想调**：
+
+| 想要的效果 | 改哪个 |
+|---|---|
+| 左列离边缘更远 | `OffsetX` 调大 |
+| 右列往左挪 | `RightOffsetX` 调大 |
+| 右列往右挪 | `RightOffsetX` 调小 |
+| 两列整体上移 | `OffsetY` 调大 |
+| 两列整体下移 | `OffsetY` 调小 |
+| 字更大/更小 | `FontSize` |
+| 只留左边一列 | `ShowArtifactProbs = false` |
 
 ---
 
