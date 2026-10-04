@@ -117,9 +117,9 @@ namespace DiceVaders.ConstellationInfo
                 try { _text.enableAutoSizing = false; } catch { }
                 _text.text = "";
 
-                ModKitLog.Info("ConstellationInfo: 面板已创建");
+                Plugin.Logger?.LogInfo("ConstellationInfo: 面板已创建");
             }
-            catch (Exception e) { ModKitLog.Info("ConstellationInfo BuildUI 失败: " + e.Message); }
+            catch (Exception e) { Plugin.Logger?.LogInfo("ConstellationInfo BuildUI 失败: " + e.Message); }
         }
 
         private void Update()
@@ -227,7 +227,7 @@ namespace DiceVaders.ConstellationInfo
             {
                 _lastSig = sig;
                 if (Plugin.DumpOnOpen != null && Plugin.DumpOnOpen.Value)
-                    ModKitLog.Info("[ConstellationInfo] " + sig.TrimEnd('|', ','));
+                    Plugin.Logger?.LogInfo("[ConstellationInfo] " + sig.TrimEnd('|', ','));
             }
         }
 
