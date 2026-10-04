@@ -62,9 +62,9 @@ namespace DiceVaders.ShopInfo
             ModKitLog.Sink = m => Logger.LogInfo(m);
 
             ShowPanel = Config.Bind("1-显示", "ShowPanel", true, "显示商店出货概率面板。");
-            OffsetX = Config.Bind("1-显示", "OffsetX", 420f,
+            OffsetX = Config.Bind("1-显示", "OffsetX", 520f,
                 new ConfigDescription("左列距屏幕左边缘像素。", new AcceptableValueRange<float>(0f, 900f)));
-            RightOffsetX = Config.Bind("1-显示", "RightOffsetX", 460f,
+            RightOffsetX = Config.Bind("1-显示", "RightOffsetX", 560f,
                 new ConfigDescription("右列距屏幕右边缘像素（默认 460，落在「发射！」按钮左边）。",
                     new AcceptableValueRange<float>(0f, 900f)));
             OffsetY = Config.Bind("1-显示", "OffsetY", 280f,
@@ -268,14 +268,14 @@ namespace DiceVaders.ShopInfo
             // ── 左：商品棋子各稀有度概率（竖排，一行一个）──
             // 配色取自游戏自己的 ContentGetter.GetRarityHex：
             //   普通 #767D5A / 罕见 #1ACB68 / 稀有 #CA47BA / 传说 #E58D07 / 星界 #C01E20
-            SetText(_textLeft,
+            var leftText =
                 "<size=85%><color=#9FB4C7>商品棋子</color></size>\n" +
                 $"<color=#E58D07>传说</color> {pLeg * 100f:0.0}%\n" +
                 $"<color=#CA47BA>稀有</color> {pRare * 100f:0.0}%\n" +
                 $"<color=#1ACB68>罕见</color> {pUnc * 100f:0.0}%\n" +
-                $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%");
+                $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%";
 
-            // ── 右：神器物品各稀有度概率（同一套曲线），底部附星界 ──
+            // ── 右：神器物品各稀有度概率（同一套曲线）──
             var rightText =
                 "<size=85%><color=#9FB4C7>神器物品</color></size>\n" +
                 $"<color=#E58D07>传说</color> {pLeg * 100f:0.0}%\n" +
@@ -283,9 +283,15 @@ namespace DiceVaders.ShopInfo
                 $"<color=#1ACB68>罕见</color> {pUnc * 100f:0.0}%\n" +
                 $"<color=#767D5A>普通</color> {pCom * 100f:0.0}%";
 
-            // 星界：独立掷骰，不占上面四档之和，所以单独一行
+            // 星界：独立掷骰，不占上面四档之和，所以单独一行 —— 两列都要显示
             if (Plugin.ShowAstral != null && Plugin.ShowAstral.Value)
-                rightText += $"\n<color=#C01E20>星界</color> {ASTRAL_CHANCE * 100f:0.0}%";
+            {
+                string astralLine = $"\n<color=#C01E20>星界</color> {ASTRAL_CHANCE * 100f:0.0}%";
+                leftText += astralLine;
+                rightText += astralLine;
+            }
+
+            SetText(_textLeft, leftText);
 
             if (Plugin.ShowArtifactProbs != null && Plugin.ShowArtifactProbs.Value)
                 SetText(_textRight, rightText);
