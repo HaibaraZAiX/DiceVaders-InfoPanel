@@ -51,6 +51,8 @@ namespace DiceVaders.ShopInfo
         internal static ConfigEntry<float> FontSize;
         internal static ConfigEntry<bool> ShowArtifactProbs;
         internal static ConfigEntry<bool> ShowPoolSummary;
+        internal static ConfigEntry<bool> ShowHiddenValues;
+        internal static ConfigEntry<float> ExtraOffsetY;
         internal static ConfigEntry<bool> LogOnRarityChange;
 
         public override void Load()
@@ -72,6 +74,15 @@ namespace DiceVaders.ShopInfo
                 "在右侧显示神器物品的稀有度概率（与左侧商品棋子共用同一套曲线）。");
             ShowPoolSummary = Config.Bind("1-显示", "ShowPoolSummary", false,
                 "（保留项）显示「本局神器池」统计。默认关，日志里仍会记录可获得数量。");
+
+            // ── 隐藏数值：游戏从不在界面上显示、但实际影响战斗的那些 EncounterValue ══
+            // 对应差评里骂的 BOSS 机制（兽化 / 怒气 / 蜂群倍率 / 血祭 等）。
+            ShowHiddenValues = Config.Bind("1-显示", "ShowHiddenValues", true,
+                "显示隐藏的对局数值（全局倍率 / 怒气 / 兽化回合 / 蜂群倍率 / 献祭% / 增益% / 最终BOSS血量 / 跳过量）。\n" +
+                "★ 只在数值非零时显示，全为零时这一块会整体隐藏，不占地方。");
+            ExtraOffsetY = Config.Bind("1-显示", "HiddenValuesOffsetY", 300f,
+                new ConfigDescription("隐藏数值块距屏幕底部像素（它在左列上方）。",
+                    new AcceptableValueRange<float>(0f, 900f)));
             LogOnRarityChange = Config.Bind("2-调试", "LogOnRarityChange", true,
                 "权重基数变化时在日志里打印一行，方便对照游戏内数值。");
 
@@ -97,8 +108,9 @@ namespace DiceVaders.ShopInfo
         private const float C_B = 0.1f;             // VA 0x183A24C00
 
         private GameObject _canvas;
-        private TMPro.TextMeshProUGUI _textLeft;    // 中下方偏左：商店四档概率
-        private TMPro.TextMeshProUGUI _textRight;   // 中下方偏右：本局神器池
+        private TMPro.TextMeshProUGUI _textLeft;    // 左下：商品棋子概率
+        private TMPro.TextMeshProUGUI _textRight;   // 右下：神器物品概率
+        private TMPro.TextMeshProUGUI _textExtra;   // 隐藏数值（只在非零时显示）
         private float _nextRefresh;
         private int _lastW = int.MinValue;
 
@@ -117,6 +129,7 @@ namespace DiceVaders.ShopInfo
 
                 _textLeft = MakeText("InfoLeft", anchoredLeft: true);
                 _textRight = MakeText("InfoRight", anchoredLeft: false);
+                _textExtra = MakeText("InfoExtra", anchoredLeft: true);
 
                 Plugin.Logger?.LogInfo("ShopInfo: 左右竖排文本已创建");
             }
@@ -180,6 +193,15 @@ namespace DiceVaders.ShopInfo
                     if (Math.Abs(_textRight.fontSize - Plugin.FontSize.Value) > 0.01f)
                         _textRight.fontSize = Plugin.FontSize.Value;
                 }
+                // 隐藏数值块：左列上方
+                if (_textExtra != null)
+                {
+                    var rt = _textExtra.rectTransform;
+                    if (rt != null)
+                        rt.anchoredPosition = new Vector2(Plugin.OffsetX.Value, Plugin.ExtraOffsetY.Value);
+                    if (Math.Abs(_textExtra.fontSize - Plugin.FontSize.Value) > 0.01f)
+                        _textExtra.fontSize = Plugin.FontSize.Value;
+                }
 
                 // 每 0.2 秒刷新一次即可（数值不会每帧变）
                 if (Time.realtimeSinceStartup < _nextRefresh) return;
@@ -191,6 +213,12 @@ namespace DiceVaders.ShopInfo
 
         private void Refresh()
         {
+            // ★ 星座界面有自己的按钮（刷新 / 刷新全部），概率列会和它们重叠 —— 那里整块隐藏。
+            //   实测截图：右列正好压在「刷新」按钮上。
+            bool constellationShowing = false;
+            try { constellationShowing = StarVaders.ConstellationController.IsShowing; } catch { }
+            if (constellationShowing) { ClearAll(); return; }
+
             var ec = Il2CppHelpers.FindCached<StarVaders.EncounterController>(0.5f);
             if (ec == null) { ClearAll(); return; }
 
@@ -242,12 +270,66 @@ namespace DiceVaders.ShopInfo
                     $"<color=#B0BEC5>普通</color> {pCom * 100f:0.0}%");
             else
                 SetText(_textRight, "");
+
+            // ── 隐藏数值块（只在非零时才有内容）──
+            if (Plugin.ShowHiddenValues != null && Plugin.ShowHiddenValues.Value)
+                SetText(_textExtra, BuildHiddenValues(em));
+            else
+                SetText(_textExtra, "");
         }
 
         private void ClearAll()
         {
             SetText(_textLeft, "");
             SetText(_textRight, "");
+            SetText(_textExtra, "");
+        }
+
+        /// <summary>
+        /// 隐藏数值 —— 游戏界面从不显示、但实际参与战斗计算的那些 EncounterValue。
+        ///
+        /// 对应差评里被骂得最凶的 BOSS 机制（兽化 / 怒气 / 蜂群倍率 / 血祭）。
+        /// 数据来源：EncounterModel.GetIntValue(EncounterValue)  RVA 0x1D2FA40
+        ///
+        /// ★ 只在数值非零时才拼进字符串 —— 平时这一块完全空白，不占视觉空间。
+        /// ★ 方法只接 IL2CPP 类型（EncounterModel），返回 string，避免 Il2CppInterop 拒注册。
+        /// </summary>
+        private string BuildHiddenValues(StarVaders.EncounterModel em)
+        {
+            var sb = new StringBuilder();
+
+            // 先收集，最后统一判断是否有内容
+            AppendHiddenInt(sb, em, EncounterValue.GlobalMult, "全局倍率", "#FFB800");
+            AppendHiddenInt(sb, em, EncounterValue.HiveMindMult, "蜂群倍率", "#C77DFF");
+            AppendHiddenInt(sb, em, EncounterValue.Rage, "怒气", "#FF7043");
+            AppendHiddenInt(sb, em, EncounterValue.BeastTurn, "兽化回合", "#FF7043");
+            AppendHiddenInt(sb, em, EncounterValue.SacrificePercent, "献祭", "#EF5350");
+            AppendHiddenInt(sb, em, EncounterValue.BoostPercent, "增益", "#66BB6A");
+            AppendHiddenInt(sb, em, EncounterValue.CurrentSkipAmount, "跳过量", "#9FB4C7");
+            AppendHiddenInt(sb, em, EncounterValue.FinalBossHP, "BOSS血量", "#EF5350");
+
+            if (sb.Length == 0) return "";
+
+            // 加个表头，说明这不是常规信息
+            return "<size=85%><color=#7E8C99>隐藏数值</color></size>\n" + sb.ToString();
+        }
+
+        /// <summary>
+        /// 若该 EncounterValue 非零则追加一行。
+        /// ★ EncounterValue 在【全局命名空间】（不在 StarVaders 下）。
+        /// ★ 用 EncounterValueTypeConfig.IsInt() 先判类型 —— 这些值里既有 int 也有 BigDouble 存法，
+        ///   对 BigDouble 存法调用 GetIntValue 会抛异常。
+        /// </summary>
+        private void AppendHiddenInt(StringBuilder sb, StarVaders.EncounterModel em,
+            EncounterValue key, string label, string color)
+        {
+            try
+            {
+                if (!EncounterValueTypeConfig.IsInt(key)) return;
+                int v = em.GetIntValue(key);
+                if (v != 0) sb.AppendLine($"<color={color}>{label}</color> {v}");
+            }
+            catch { }
         }
 
 
