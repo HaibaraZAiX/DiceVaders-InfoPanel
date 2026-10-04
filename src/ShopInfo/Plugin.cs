@@ -113,14 +113,14 @@ namespace DiceVaders.ShopInfo
             try
             {
                 _canvas = UiInjector.GetOverlayCanvas("DiceVaders_ShopInfoCanvas", 31000);
-                if (_canvas == null) { ModKitLog.Info("ShopInfo: Canvas 创建失败"); return; }
+                if (_canvas == null) { Plugin.Logger?.LogInfo("ShopInfo: Canvas 创建失败"); return; }
 
                 _textLeft = MakeText("InfoLeft", anchoredLeft: true);
                 _textRight = MakeText("InfoRight", anchoredLeft: false);
 
-                ModKitLog.Info("ShopInfo: 左右竖排文本已创建");
+                Plugin.Logger?.LogInfo("ShopInfo: 左右竖排文本已创建");
             }
-            catch (Exception e) { ModKitLog.Info("ShopInfo BuildUI 失败: " + e.Message); }
+            catch (Exception e) { Plugin.Logger?.LogInfo("ShopInfo BuildUI 失败: " + e.Message); }
         }
 
         /// <summary>
@@ -205,7 +205,7 @@ namespace DiceVaders.ShopInfo
             {
                 _lastW = w;
                 if (Plugin.LogOnRarityChange != null && Plugin.LogOnRarityChange.Value)
-                    ModKitLog.Info($"[ShopInfo] 权重基数 W 变为 {w}");
+                    Plugin.Logger?.LogInfo($"[ShopInfo] 权重基数 W 变为 {w}");
             }
 
             // ── 概率：按【累积分布】算（游戏是 r<c1→传说; r<c2→稀有; r<c3→罕见; else→普通）──
@@ -250,75 +250,6 @@ namespace DiceVaders.ShopInfo
             SetText(_textRight, "");
         }
 
-        /// <summary>
-        /// 本局神器池统计 —— 一行小字版。
-        ///
-        /// 依据：ContentGetter.GetAllArtifactsOfType(type) 列出某类型全部神器，
-        ///       再用 IsArtifactGettableInCurrentRun(name, encounterModel) 过滤（RVA 0x1CFED00）——
-        ///       后者就是游戏自己生成候选池时用的判定，所以这里显示的就是「这一局实际能抽到什么」。
-        ///
-        /// ★ 方法签名只用 IL2CPP 类型（EncounterModel）与 string，避免 Il2CppInterop 拒绝注册。
-        /// </summary>
-        private string BuildPoolSummaryLine(StarVaders.EncounterModel em)
-        {
-            // 缓存：同一个 EncounterModel 5 秒内不重算（遍历几百个神器不便宜）
-            string key = ((IntPtr)em.Pointer).ToString();
-            if (key == _poolKey && Time.realtimeSinceStartup - _poolAt < 5f && _poolText != null)
-                return _poolText;
-
-            var sb = new StringBuilder();
-            sb.Append("<color=#9FB4C7>本局池</color> ");
-
-            var pairs = new (StarVaders.ArtifactType type, string label)[]
-            {
-                (StarVaders.ArtifactType.Column, "列"),
-                (StarVaders.ArtifactType.Power, "能力"),
-                (StarVaders.ArtifactType.Token, "令牌"),
-                (StarVaders.ArtifactType.Starter, "起始"),
-            };
-
-            foreach (var (type, label) in pairs)
-            {
-                try
-                {
-                    var all = StarVaders.ContentGetter.GetAllArtifactsOfType(type);
-                    if (all == null) continue;
-
-                    int[] cnt = new int[6];
-                    int total = 0;
-                    for (int i = 0; i < all.Count; i++)
-                    {
-                        StarVaders.ArtifactModel a = null;
-                        try { a = all[i]; } catch { }
-                        if (a == null) continue;
-                        try
-                        {
-                            if (!StarVaders.ContentGetter.IsArtifactGettableInCurrentRun(a.ArtifactName, em)) continue;
-                            int r = (int)a.Rarity;
-                            if (r >= 1 && r <= 4) cnt[r]++;
-                            total++;
-                        }
-                        catch { }
-                    }
-
-                    sb.Append($"{label}<color=#B0BEC5>{total}</color> ");
-                    if (cnt[4] > 0) sb.Append($"<color=#FFB800>传{cnt[4]}</color> ");
-                    if (cnt[3] > 0) sb.Append($"<color=#C77DFF>稀{cnt[3]}</color> ");
-                    if (cnt[2] > 0) sb.Append($"<color=#4FC3F7>罕{cnt[2]}</color> ");
-                    sb.Append("　");
-                }
-                catch { }
-            }
-
-            _poolText = sb.ToString().TrimEnd('　');
-            _poolKey = key;
-            _poolAt = Time.realtimeSinceStartup;
-            return _poolText;
-        }
-
-        private string _poolKey = "";
-        private float _poolAt = -99f;
-        private string _poolText;
 
         // ★ 用两个无参/单 string 参数的小方法分别写左右文本：
         //   把 TextMeshProUGUI 当参数传同样有被 Il2CppInterop 拒注册的风险。
