@@ -6,7 +6,7 @@
 
 ---
 
-## 两个功能
+## 三个功能
 
 ### 1. 商品棋子概率（贴屏幕左边缘）
 
@@ -34,6 +34,26 @@
 
 > **为什么贴左右边缘**：游戏的战斗区在正中间、骰子区在底部中间，
 > 左右两侧的边缘空档正好放这两列竖排小字，不挡任何操作。
+
+### 3. 隐藏数值（左列上方，仅在非零时出现）
+
+游戏界面**从不显示**、但实际参与战斗计算的那些值 —— 对应被抱怨最多的 BOSS 机制：
+
+```
+隐藏数值
+怒气 3
+兽化回合 2
+蜂群倍率 5
+```
+
+涵盖：**全局倍率 / 蜂群倍率 / 怒气 / 兽化回合 / 献祭% / 增益% / 跳过量 / BOSS血量**。
+
+**全为零时这一块整体消失**，不占视觉空间。
+
+> 这些值有的用 `int` 存、有的用 `BigDouble` 存（见游戏的 `EncounterValueTypeConfig`），
+> 本 mod 先判类型再读，避免取错。
+
+**星座界面会自动隐藏整块概率显示** —— 那里的「刷新 / 刷新全部」按钮会和概率列重叠。
 
 ---
 
@@ -95,9 +115,11 @@ DiceVaders\
 ShowPanel = true          # 总开关
 OffsetX = 20              # 左列距屏幕【左】边缘像素
 RightOffsetX = 460        # 右列距屏幕【右】边缘像素（默认落在「发射！」按钮左边）
-OffsetY = 140             # 两列距屏幕【底部】像素
+OffsetY = 140             # 概率两列距屏幕【底部】像素
 FontSize = 15             # 字号（想更小就 12~13）
 ShowArtifactProbs = true  # 右侧那列（神器概率）
+ShowHiddenValues = true   # 隐藏数值块（只在非零时出现）
+HiddenValuesOffsetY = 300 # 隐藏数值块距屏幕底部像素（在左列上方）
 
 [2-调试]
 LogOnRarityChange = true  # W 变化时写一行日志，便于核对
@@ -110,10 +132,12 @@ LogOnRarityChange = true  # W 变化时写一行日志，便于核对
 | 左列离边缘更远 | `OffsetX` 调大 |
 | 右列往左挪 | `RightOffsetX` 调大 |
 | 右列往右挪 | `RightOffsetX` 调小 |
-| 两列整体上移 | `OffsetY` 调大 |
-| 两列整体下移 | `OffsetY` 调小 |
+| 概率两列上移 | `OffsetY` 调大 |
+| 概率两列下移 | `OffsetY` 调小 |
+| 隐藏数值块上移 | `HiddenValuesOffsetY` 调大 |
 | 字更大/更小 | `FontSize` |
 | 只留左边一列 | `ShowArtifactProbs = false` |
+| 不要隐藏数值块 | `ShowHiddenValues = false` |
 
 ---
 
